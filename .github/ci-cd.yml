@@ -1,0 +1,74 @@
+name: CI/CD Pipeline
+
+# Trigger the workflow on push to the main branch
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    # Step 2: Set up Python (for FastAPI backend)
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'  # specify your Python version
+
+    # Step 3: Install backend dependencies
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        python -m venv venv
+        source venv/bin/activate
+        pip install -r requirements.txt
+
+    # Step 4: Install frontend dependencies
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm install
+
+    # Step 5: Build the frontend (React)
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+
+    # Step 6: Run tests for the backend (if any tests are defined)
+    - name: Run backend tests
+      run: |
+        cd backend
+        source venv/bin/activate
+        pytest  # or any other test command you use
+
+    # Step 7: Deploy the frontend to S3 (using AWS CLI)
+    - name: Deploy frontend to S3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        aws s3 sync frontend/build/ s3://your-s3-bucket-name --delete
+
+    # Step 8: Deploy the backend to EC2 (using SSH)
+    - name: Deploy backend to EC2
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        ssh -o StrictHostKeyChecking=no -i /path/to/your/key.pem ubuntu@your-ec2-public-ip << 'EOF'
+          cd /home/ubuntu/fullstack-todo-app/backend
+          source venv/bin/activate
+          git pull origin main
+          # Restart the backend service if needed (e.g., using systemd or pm2)
+          sudo systemctl restart your-backend-service
+        EOF
